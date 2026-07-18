@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         StashDB – Search for Scene
 // @namespace    https://github.com/7dJx1qP/stashdb-userscripts
-// @version      1.0.3
+// @version      1.0.0
 // @description  Adds “Search for Scene” to the StashDB Userscripts scene-card menu.
 // @author       Jan
 // @match        https://stashdb.org/*
