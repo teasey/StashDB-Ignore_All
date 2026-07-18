@@ -17,6 +17,9 @@
     const BUTTON_ID = 'stashdb-ignore-all-scenes';
     const DEFAULT_STATE = '{"ignored":false,"wanted":false}';
     let isSaving = false;
+    let placementObserver;
+    let placementTimeout;
+    let placementPending = false;
 
     function sceneCards() {
         return [...document.querySelectorAll('.SceneCard')];
@@ -82,7 +85,8 @@
     }
 
     function addButton() {
-        if (!sceneCards().length) return;
+        const visibleFilter = document.querySelector('.visible-filter');
+        if (!visibleFilter || !document.querySelector('.SceneCard')) return false;
 
         let button = document.getElementById(BUTTON_ID);
         if (!button) {
@@ -95,26 +99,50 @@
             button.addEventListener('click', () => ignoreAll(button));
         }
 
-        // The companion Scene Filter creates this dropdown. Putting the button
-        // after its wrapper makes it appear immediately to the right of it.
-        const visibleFilter = document.querySelector('.visible-filter');
-        if (visibleFilter) {
+        // Avoid moving an already correctly placed button: moving it creates a
+        // DOM mutation, which previously caused an observer feedback loop.
+        if (visibleFilter.nextElementSibling !== button) {
             visibleFilter.insertAdjacentElement('afterend', button);
-            return;
         }
+        return true;
+    }
 
-        // Fallback for use without the companion Scene Filter.
-        const sceneSort = document.querySelector('.scene-sort');
-        if (sceneSort?.parentElement) sceneSort.insertAdjacentElement('afterend', button);
+    function stopPlacementObserver() {
+        placementObserver?.disconnect();
+        placementObserver = undefined;
+        window.clearTimeout(placementTimeout);
+        placementTimeout = undefined;
+        placementPending = false;
+    }
+
+    function startPlacementObserver() {
+        stopPlacementObserver();
+
+        const tryPlaceButton = () => {
+            placementPending = false;
+            if (addButton()) stopPlacementObserver();
+        };
+
+        // The companion filter is added asynchronously. Observe only while it
+        // is being rendered, then disconnect instead of observing the page for
+        // its entire lifetime.
+        placementObserver = new MutationObserver(() => {
+            if (!placementPending) {
+                placementPending = true;
+                queueMicrotask(tryPlaceButton);
+            }
+        });
+        placementObserver.observe(document.documentElement, { childList: true, subtree: true });
+        placementTimeout = window.setTimeout(stopPlacementObserver, 5000);
+        tryPlaceButton();
     }
 
     function observePage() {
-        addButton();
-        new MutationObserver(addButton).observe(document.documentElement, { childList: true, subtree: true });
+        startPlacementObserver();
 
         // Add the button immediately after in-app navigation by the companion bundle.
         const stashdb = unsafeWindow.stashdb;
-        stashdb.addEventListener('page', () => window.setTimeout(addButton, 0));
+        stashdb.addEventListener('page', () => window.setTimeout(startPlacementObserver, 0));
     }
 
     if (document.readyState === 'loading') {
