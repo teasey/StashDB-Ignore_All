@@ -107,7 +107,19 @@
         const sceneSort = document.querySelector('.scene-sort');
         if (sceneSort?.parentElement) sceneSort.insertAdjacentElement('afterend', button);
     }
-    addButton();
 
+    function observePage() {
+        addButton();
+        new MutationObserver(addButton).observe(document.documentElement, { childList: true, subtree: true });
 
+        // Add the button immediately after in-app navigation by the companion bundle.
+        const stashdb = unsafeWindow.stashdb;
+        stashdb.addEventListener('page', () => window.setTimeout(addButton, 0));
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', observePage, { once: true });
+    } else {
+        observePage();
+    }
 })();
