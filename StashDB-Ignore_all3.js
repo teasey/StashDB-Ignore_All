@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         StashDB – Ignore all Scenes
 // @namespace    https://github.com/7dJx1qP/stashdb-userscripts
-// @version      1.0.1
+// @version      1.0.0
 // @description  Adds an "Ignore all Scenes" button and marks every visible StashDB scene card as ignored.
 // @author       Jan
 // @match        https://stashdb.org/*
