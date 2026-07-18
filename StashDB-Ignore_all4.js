@@ -107,6 +107,7 @@
         const sceneSort = document.querySelector('.scene-sort');
         if (sceneSort?.parentElement) sceneSort.insertAdjacentElement('afterend', button);
     }
+    addButton();
 
 
 })();
