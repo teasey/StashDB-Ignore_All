@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         StashDB – Ignore all Scenes
 // @namespace    https://github.com/7dJx1qP/stashdb-userscripts
-// @version      1.0.0
+// @version      1.0.1
 // @description  Adds an "Ignore all Scenes" button and marks every visible StashDB scene card as ignored.
 // @author       Jan
 // @match        https://stashdb.org/*
@@ -82,24 +82,30 @@
     }
 
     function addButton() {
-        if (document.getElementById(BUTTON_ID) || !sceneCards().length) return;
+        if (!sceneCards().length) return;
 
-        const button = document.createElement('button');
-        button.id = BUTTON_ID;
-        button.type = 'button';
-        button.className = 'btn btn-outline-danger';
-        button.textContent = 'Ignore all Scenes';
-        button.title = 'Mark every scene currently shown on this page as ignored';
-        button.addEventListener('click', () => ignoreAll(button));
-
-        // Place it beside StashDB's existing scene controls when available.
-        const sceneSort = document.querySelector('.scene-sort');
-        if (sceneSort?.parentElement) {
-            sceneSort.insertAdjacentElement('afterend', button);
-        } else {
-            const controls = document.querySelector('.navbar-nav, .scenes-list, .HomePage-scenes');
-            if (controls) controls.insertAdjacentElement('beforebegin', button);
+        let button = document.getElementById(BUTTON_ID);
+        if (!button) {
+            button = document.createElement('button');
+            button.id = BUTTON_ID;
+            button.type = 'button';
+            button.className = 'btn btn-outline-danger';
+            button.textContent = 'Ignore all Scenes';
+            button.title = 'Mark every scene currently shown on this page as ignored';
+            button.addEventListener('click', () => ignoreAll(button));
         }
+
+        // The companion Scene Filter creates this dropdown. Putting the button
+        // after its wrapper makes it appear immediately to the right of it.
+        const visibleFilter = document.querySelector('.visible-filter');
+        if (visibleFilter) {
+            visibleFilter.insertAdjacentElement('afterend', button);
+            return;
+        }
+
+        // Fallback for use without the companion Scene Filter.
+        const sceneSort = document.querySelector('.scene-sort');
+        if (sceneSort?.parentElement) sceneSort.insertAdjacentElement('afterend', button);
     }
 
     function observePage() {
