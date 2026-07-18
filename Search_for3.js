@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         StashDB – Search for Scene
 // @namespace    https://github.com/7dJx1qP/stashdb-userscripts
-// @version      1.0.1
+// @version      1.0.3
 // @description  Adds “Search for Scene” to the StashDB Userscripts scene-card menu.
 // @author       Jan
 // @match        https://stashdb.org/*
@@ -121,8 +121,14 @@
         return true;
     }
 
-    const waitForBundle = window.setInterval(() => {
+    // The original version polled forever when the companion bundle was not
+    // present yet. Limit this inexpensive startup check so this add-on becomes
+    // completely idle after initialization.
+    const bundleWaitDeadline = Date.now() + 15000;
+    function waitForBundle() {
         const stashdb = typeof unsafeWindow === 'undefined' ? null : unsafeWindow.stashdb?.stashdb;
-        if (stashdb && register(stashdb)) window.clearInterval(waitForBundle);
-    }, 100);
+        if (stashdb && register(stashdb)) return;
+        if (Date.now() < bundleWaitDeadline) window.setTimeout(waitForBundle, 500);
+    }
+    waitForBundle();
 })();
