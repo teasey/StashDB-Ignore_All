@@ -13,6 +13,7 @@
     'use strict';
 
     const MENU_ITEM_CLASS = 'stashdb-search-for-scene';
+    const STUDIO_MENU_ITEM_CLASS = 'stashdb-search-for-scene-by-studio';
     const SEARCH_URL_TEMPLATE = 'https://drunkenslug.com/search/%s';
 
     function searchUrl(terms) {
@@ -27,13 +28,14 @@
         return match ? match[1] : null;
     }
 
-    function fallbackSearchTerms(sceneEl) {
+    function fallbackSearchTerms(sceneEl, byStudio = false) {
         const title = sceneEl.querySelector('.card-header h5, .card-title, h5, h4')?.textContent?.trim() || '';
         const performer = sceneEl.querySelector('a[href*="/performers/"]')?.textContent?.trim() || '';
-        return [title, performer].filter(Boolean).join(' ');
+        const studio = sceneEl.querySelector('a[href*="/studios/"]')?.textContent?.trim().replace(/\s+/g, '') || '';
+        return (byStudio ? [performer, studio] : [title, performer]).filter(Boolean).join(' ');
     }
 
-    async function sceneSearchTerms(stashdb, stashId, sceneEl) {
+    async function sceneSearchTerms(stashdb, stashId, sceneEl, byStudio = false) {
         const request = {
             operationName: 'SceneSearchTerms',
             variables: { id: stashId },
@@ -41,13 +43,15 @@
                 findScene(id: $id) {
                     title
                     performers { performer { name } }
+                    studio { name }
                 }
             }`,
         };
         const scene = (await stashdb.callStashDbGQL(request))?.data?.findScene;
         const title = scene?.title || sceneEl.querySelector('.card-header h5, .card-title, h5')?.textContent?.trim();
         const performer = scene?.performers?.[0]?.performer?.name || '';
-        return [title, performer].filter(Boolean).join(' ');
+        const studio = scene?.studio?.name?.replace(/\s+/g, '') || '';
+        return (byStudio ? [performer, studio] : [title, performer]).filter(Boolean).join(' ');
     }
 
     function addMenuItem(stashdb, sceneEl, markerEl) {
@@ -98,6 +102,37 @@
         });
 
         menu.appendChild(item);
+
+        const studioItem = document.createElement('a');
+        studioItem.className = `dropdown-item ${STUDIO_MENU_ITEM_CLASS}`;
+        studioItem.href = '#';
+        studioItem.textContent = 'Search for Scene by Studio';
+        studioItem.style.cssText = 'color: black; padding: 5px; text-decoration: none';
+
+        studioItem.addEventListener('click', async event => {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+
+            const searchTab = window.open('about:blank', '_blank');
+            if (!searchTab) {
+                console.warn('[StashDB Search for Scene] The browser blocked the new tab.');
+                return;
+            }
+
+            studioItem.textContent = 'Searching by Studio...';
+            try {
+                const terms = await sceneSearchTerms(stashdb, stashId, sceneEl, true);
+                if (!terms) throw new Error('No performer or studio was found.');
+                searchTab.location.replace(searchUrl(terms));
+            } catch (error) {
+                console.error('[StashDB Search for Scene by Studio]', error);
+                const fallback = fallbackSearchTerms(sceneEl, true) || stashId;
+                searchTab.location.replace(searchUrl(fallback));
+                studioItem.textContent = fallback === stashId ? 'Searched by StashID' : 'Searched with card data';
+            }
+        });
+
+        menu.appendChild(studioItem);
     }
 
     function wireMarker(stashdb, sceneEl) {
