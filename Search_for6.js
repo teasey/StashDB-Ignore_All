@@ -13,6 +13,11 @@
     'use strict';
 
     const MENU_ITEM_CLASS = 'stashdb-search-for-scene';
+    const SEARCH_URL_TEMPLATE = 'https://drunkenslug.com/search/%s';
+
+    function searchUrl(terms) {
+        return SEARCH_URL_TEMPLATE.replace('%s', encodeURIComponent(terms));
+    }
 
     function stashIdFromCard(sceneEl) {
         const link = sceneEl.querySelector('.card-footer a[href*="/scenes/"]')
@@ -76,17 +81,17 @@
             try {
                 const terms = await sceneSearchTerms(stashdb, stashId, sceneEl);
                 if (!terms) throw new Error('No scene title was found.');
-                searchTab.location.replace(`https://www.google.com/search?q=${encodeURIComponent(terms)}`);
+                searchTab.location.replace(searchUrl(terms));
             } catch (error) {
                 console.error('[StashDB Search for Scene]', error);
                 // Never close the user-visible tab on an API error. Cards still
                 // contain enough information for a useful fallback search.
                 const fallback = fallbackSearchTerms(sceneEl);
                 if (fallback) {
-                    searchTab.location.replace(`https://www.google.com/search?q=${encodeURIComponent(fallback)}`);
+                    searchTab.location.replace(searchUrl(fallback));
                     item.textContent = 'Searched with card data';
                 } else {
-                    searchTab.location.replace(`https://www.google.com/search?q=${encodeURIComponent(stashId)}`);
+                    searchTab.location.replace(searchUrl(stashId));
                     item.textContent = 'Searched by StashID';
                 }
             }
@@ -121,14 +126,15 @@
         return true;
     }
 
-    // The original version polled forever when the companion bundle was not
-    // present yet. Limit this inexpensive startup check so this add-on becomes
-    // completely idle after initialization.
-    const bundleWaitDeadline = Date.now() + 15000;
-    function waitForBundle() {
-        const stashdb = typeof unsafeWindow === 'undefined' ? null : unsafeWindow.stashdb?.stashdb;
-        if (stashdb && register(stashdb)) return;
-        if (Date.now() < bundleWaitDeadline) window.setTimeout(waitForBundle, 500);
+    // This extension is intended to run with the StashDB Userscripts Bundle.
+    // Start exactly once; there is deliberately no bundle detection or polling.
+    function start() {
+        register(unsafeWindow.stashdb.stashdb);
     }
-    waitForBundle();
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', start, { once: true });
+    } else {
+        start();
+    }
 })();
