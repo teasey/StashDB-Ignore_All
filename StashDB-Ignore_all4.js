@@ -108,19 +108,5 @@
         if (sceneSort?.parentElement) sceneSort.insertAdjacentElement('afterend', button);
     }
 
-    function observePage() {
-        addButton();
-        new MutationObserver(addButton).observe(document.documentElement, { childList: true, subtree: true });
 
-        // When the companion bundle is installed, its SPA navigation event lets us
-        // add the button immediately after every in-app page change.
-        const stashdb = typeof unsafeWindow === 'undefined' ? null : unsafeWindow.stashdb;
-        stashdb?.addEventListener?.('page', () => window.setTimeout(addButton, 0));
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', observePage, { once: true });
-    } else {
-        observePage();
-    }
 })();
