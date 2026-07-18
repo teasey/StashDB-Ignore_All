@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         StashDB – Search for Scene
 // @namespace    https://github.com/7dJx1qP/stashdb-userscripts
-// @version      1.0.0
+// @version      1.0.1
 // @description  Adds “Search for Scene” to the StashDB Userscripts scene-card menu.
 // @author       Jan
 // @match        https://stashdb.org/*
@@ -22,6 +22,12 @@
         return match ? match[1] : null;
     }
 
+    function fallbackSearchTerms(sceneEl) {
+        const title = sceneEl.querySelector('.card-header h5, .card-title, h5, h4')?.textContent?.trim() || '';
+        const performer = sceneEl.querySelector('a[href*="/performers/"]')?.textContent?.trim() || '';
+        return [title, performer].filter(Boolean).join(' ');
+    }
+
     async function sceneSearchTerms(stashdb, stashId, sceneEl) {
         const request = {
             operationName: 'SceneSearchTerms',
@@ -29,13 +35,13 @@
             query: `query SceneSearchTerms($id: ID!) {
                 findScene(id: $id) {
                     title
-                    performers { name }
+                    performers { performer { name } }
                 }
             }`,
         };
         const scene = (await stashdb.callStashDbGQL(request))?.data?.findScene;
         const title = scene?.title || sceneEl.querySelector('.card-header h5, .card-title, h5')?.textContent?.trim();
-        const performer = scene?.performers?.[0]?.name || '';
+        const performer = scene?.performers?.[0]?.performer?.name || '';
         return [title, performer].filter(Boolean).join(' ');
     }
 
@@ -73,8 +79,16 @@
                 searchTab.location.replace(`https://www.google.com/search?q=${encodeURIComponent(terms)}`);
             } catch (error) {
                 console.error('[StashDB Search for Scene]', error);
-                searchTab.close();
-                item.textContent = 'Search failed';
+                // Never close the user-visible tab on an API error. Cards still
+                // contain enough information for a useful fallback search.
+                const fallback = fallbackSearchTerms(sceneEl);
+                if (fallback) {
+                    searchTab.location.replace(`https://www.google.com/search?q=${encodeURIComponent(fallback)}`);
+                    item.textContent = 'Searched with card data';
+                } else {
+                    searchTab.location.replace(`https://www.google.com/search?q=${encodeURIComponent(stashId)}`);
+                    item.textContent = 'Searched by StashID';
+                }
             }
         });
 
