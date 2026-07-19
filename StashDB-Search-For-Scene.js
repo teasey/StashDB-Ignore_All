@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         StashDB – Search for Scene
 // @namespace    https://github.com/7dJx1qP/stashdb-userscripts
-// @version      1.0.0
+// @version      1.0.3
 // @description  Adds “Search for Scene” to the StashDB Userscripts scene-card menu.
 // @author       Jan
 // @match        https://stashdb.org/*
@@ -35,6 +35,26 @@
         return (byStudio ? [performer, studio] : [title, performer]).filter(Boolean).join(' ');
     }
 
+    async function preferredPerformerName(stashdb, appearances) {
+        const performers = appearances || [];
+
+        // Preserve the StashDB scene order. The first performer already known
+        // by the configured local Stash instance takes precedence.
+        for (const appearance of performers) {
+            const performer = appearance?.performer;
+            if (!performer?.id || !performer?.name) continue;
+
+            try {
+                const localResult = await stashdb.findPerformerByStashId(performer.id);
+                if (localResult?.data?.findPerformers?.count > 0) return performer.name;
+            } catch (error) {
+                console.warn('[StashDB Search for Scene] Local performer lookup failed.', error);
+            }
+        }
+
+        return performers[0]?.performer?.name || '';
+    }
+
     async function sceneSearchTerms(stashdb, stashId, sceneEl, byStudio = false) {
         const request = {
             operationName: 'SceneSearchTerms',
@@ -42,14 +62,14 @@
             query: `query SceneSearchTerms($id: ID!) {
                 findScene(id: $id) {
                     title
-                    performers { performer { name } }
+                    performers { performer { id name } }
                     studio { name }
                 }
             }`,
         };
         const scene = (await stashdb.callStashDbGQL(request))?.data?.findScene;
         const title = scene?.title || sceneEl.querySelector('.card-header h5, .card-title, h5')?.textContent?.trim();
-        const performer = scene?.performers?.[0]?.performer?.name || '';
+        const performer = await preferredPerformerName(stashdb, scene?.performers);
         const studio = scene?.studio?.name?.replace(/\s+/g, '') || '';
         return (byStudio ? [performer, studio] : [title, performer]).filter(Boolean).join(' ');
     }
