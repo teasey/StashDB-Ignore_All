@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         StashDB - Ignore all Scenes
 // @namespace    https://github.com/7dJx1qP/stashdb-userscripts
-// @version      1.0.1
+// @version      1.0.2
 // @description  Adds an Ignore all Scenes button next to the scene filter.
 // @match        https://stashdb.org/*
 // @grant        GM.getValue
@@ -32,6 +32,27 @@
         return match ? match[1] : null;
     }
 
+    async function getSceneState(stashId) {
+        try {
+            return JSON.parse(await GM.getValue(stashId, DEFAULT_STATE));
+        } catch (_) {
+            return JSON.parse(DEFAULT_STATE);
+        }
+    }
+
+    async function existsInLocalStash(card, stashId) {
+        // The bundle may already have determined this while rendering the card.
+        if (card.querySelector('.stash_id_match.match-yes')) return true;
+
+        try {
+            const result = await unsafeWindow.stashdb.stashdb.findSceneByStashId(stashId);
+            return result?.data?.findScenes?.count > 0;
+        } catch (error) {
+            console.warn('[StashDB Ignore all Scenes] Local scene lookup failed.', error);
+            return false;
+        }
+    }
+
     async function ignoreAll(button) {
         if (isSaving) return;
 
@@ -43,26 +64,33 @@
         isSaving = true;
         button.disabled = true;
         const defaultLabel = 'Ignore all Scenes';
-        button.textContent = `Ignoring 0/${scenes.length}...`;
+        button.textContent = `Checking ${scenes.length} scenes...`;
 
         let completed = 0;
         try {
-            await Promise.all(scenes.map(async ({ card, stashId }) => {
-                let state;
-                try {
-                    state = JSON.parse(await GM.getValue(stashId, DEFAULT_STATE));
-                } catch (_) {
-                    state = JSON.parse(DEFAULT_STATE);
-                }
+            const eligibleScenes = (await Promise.all(scenes.map(async ({ card, stashId }) => {
+                const state = await getSceneState(stashId);
+                if (state.wanted === true || state.ignored === true) return null;
+                if (await existsInLocalStash(card, stashId)) return null;
+                return { card, stashId, state };
+            }))).filter(Boolean);
+
+            if (!eligibleScenes.length) {
+                button.textContent = 'No eligible scenes found';
+                return;
+            }
+
+            button.textContent = `Ignoring 0/${eligibleScenes.length}...`;
+            await Promise.all(eligibleScenes.map(async ({ card, stashId, state }) => {
 
                 state.ignored = true;
                 await GM.setValue(stashId, JSON.stringify(state));
                 card.classList.add('stash_id_ignored');
 
                 completed += 1;
-                button.textContent = `Ignoring ${completed}/${scenes.length}...`;
+                button.textContent = `Ignoring ${completed}/${eligibleScenes.length}...`;
             }));
-            button.textContent = `Ignored ${scenes.length} scene${scenes.length === 1 ? '' : 's'}`;
+            button.textContent = `Ignored ${eligibleScenes.length} scene${eligibleScenes.length === 1 ? '' : 's'}`;
         } catch (error) {
             console.error('[StashDB Ignore all Scenes]', error);
             button.textContent = 'Could not ignore all scenes';
