@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         StashDB - Ignore all Scenes
 // @namespace    https://github.com/7dJx1qP/stashdb-userscripts
-// @version      1.0.2
+// @version      1.0.3
 // @description  Adds an Ignore all Scenes button next to the scene filter.
 // @match        https://stashdb.org/*
 // @grant        GM.getValue
@@ -148,6 +148,13 @@
         waitForFilter();
         // The bundle is intentionally assumed to be installed.
         unsafeWindow.stashdb.addEventListener('page', () => window.setTimeout(waitForFilter, 0));
+
+        // The No Ignored filter dispatches this after StashDB has rendered the
+        // replacement dropdown during pagination. Reattach the button there
+        // instead of leaving it in the old, discarded filter container.
+        document.addEventListener('stashdb-no-ignored-filter-ready', () => {
+            window.setTimeout(waitForFilter, 0);
+        });
     }
 
     if (document.readyState === 'loading') {
