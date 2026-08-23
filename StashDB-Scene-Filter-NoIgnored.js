@@ -21,7 +21,16 @@
             const column = sceneCard.parentElement;
             if (!column) continue;
 
-            const isOwned = Boolean(sceneCard.querySelector('.stash_id_match.match-yes'));
+            // The bundle adds this marker only after it has loaded both the
+            // local-Stash match and the saved ignored state. Do not classify a
+            // card as missing while that asynchronous work is still pending.
+            const marker = sceneCard.querySelector('.stash_id_match');
+            if (!marker) {
+                if (select.value === MISSING_NO_IGNORED) column.classList.add('d-none');
+                continue;
+            }
+
+            const isOwned = marker.classList.contains('match-yes');
             const isIgnored = sceneCard.classList.contains('stash_id_ignored');
             const show = select.value === MISSING_NO_IGNORED ? !isOwned && !isIgnored : true;
 
@@ -91,7 +100,8 @@
         unsafeWindow.stashdb.addEventListener('scenecard', () => {
             const select = document.querySelector('.visible-filter select');
             if (select?.value === MISSING_NO_IGNORED) {
-                updateVisibility(select);
+                // The bundle dispatches this after a card state is resolved.
+                window.setTimeout(() => updateVisibility(select), 0);
             }
         });
 
