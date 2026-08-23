@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         StashDB Scene Filter - No Ignored
 // @namespace    https://github.com/7dJx1qP/stashdb-userscripts
-// @version      1.0.0
+// @version      1.1.0
 // @description  Adds non-ignored Owned and Missing filters to the StashDB Scene Filter dropdown.
 // @match        https://stashdb.org/*
 // @grant        unsafeWindow
@@ -11,8 +11,8 @@
 (function () {
     'use strict';
 
-    const OWNED_NO_IGNORED = 'OWNED_NO_IGNORED';
     const MISSING_NO_IGNORED = 'MISSING_NO_IGNORED';
+    const FILTER_STORAGE_KEY = 'stashdb.sceneFilter.noIgnored';
     let waitObserver;
     let waitTimeout;
 
@@ -23,31 +23,42 @@
 
             const isOwned = Boolean(sceneCard.querySelector('.stash_id_match.match-yes'));
             const isIgnored = sceneCard.classList.contains('stash_id_ignored');
-            const show = select.value === OWNED_NO_IGNORED
-                ? isOwned && !isIgnored
-                : select.value === MISSING_NO_IGNORED
-                    ? !isOwned && !isIgnored
-                    : true;
+            const show = select.value === MISSING_NO_IGNORED ? !isOwned && !isIgnored : true;
 
-            if (select.value === OWNED_NO_IGNORED || select.value === MISSING_NO_IGNORED) {
+            if (select.value === MISSING_NO_IGNORED) {
                 column.classList.toggle('d-none', !show);
             }
         }
     }
 
+    function restoreSavedFilter(select) {
+        if (sessionStorage.getItem(FILTER_STORAGE_KEY) === MISSING_NO_IGNORED) {
+            select.value = MISSING_NO_IGNORED;
+            updateVisibility(select);
+        }
+    }
+
     function install(select) {
-        if (select.dataset.noIgnoredFilterInstalled) return true;
+        if (select.dataset.noIgnoredFilterInstalled) {
+            restoreSavedFilter(select);
+            return true;
+        }
 
         const showAll = [...select.options].some(option => option.value === 'ALL');
         if (!showAll) return false;
 
-        const ownedOption = new Option('Show Owned no Ignored', OWNED_NO_IGNORED);
         const missingOption = new Option('Show Missing no Ignored', MISSING_NO_IGNORED);
-        select.add(ownedOption);
         select.add(missingOption);
         select.dataset.noIgnoredFilterInstalled = 'true';
 
-        select.addEventListener('change', () => updateVisibility(select));
+        select.addEventListener('change', () => {
+            sessionStorage.setItem(FILTER_STORAGE_KEY, select.value);
+            updateVisibility(select);
+        });
+
+        // sessionStorage is scoped to this browser tab, so the selected filter
+        // survives StashDB's in-app pagination without affecting other tabs.
+        restoreSavedFilter(select);
         return true;
     }
 
@@ -79,7 +90,7 @@
 
         unsafeWindow.stashdb.addEventListener('scenecard', () => {
             const select = document.querySelector('.visible-filter select');
-            if (select?.value === OWNED_NO_IGNORED || select?.value === MISSING_NO_IGNORED) {
+            if (select?.value === MISSING_NO_IGNORED) {
                 updateVisibility(select);
             }
         });
@@ -90,6 +101,23 @@
         unsafeWindow.stashdb.addEventListener('page', () => {
             window.setTimeout(installOnCurrentPage, 0);
         });
+
+        // Pagination changes only the query string, so some StashDB versions do
+        // not emit a bundle page event. Listen to SPA history navigation too.
+        const scheduleInstall = () => window.setTimeout(installOnCurrentPage, 50);
+        const originalPushState = history.pushState;
+        history.pushState = function (...args) {
+            const result = originalPushState.apply(this, args);
+            scheduleInstall();
+            return result;
+        };
+        const originalReplaceState = history.replaceState;
+        history.replaceState = function (...args) {
+            const result = originalReplaceState.apply(this, args);
+            scheduleInstall();
+            return result;
+        };
+        window.addEventListener('popstate', scheduleInstall);
     }
 
     if (document.readyState === 'loading') {
