@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         StashDB Scene Filter - No Ignored
 // @namespace    https://github.com/7dJx1qP/stashdb-userscripts
-// @version      1.1.1
+// @version      1.1.2
 // @description  Adds non-ignored Owned and Missing filters to the StashDB Scene Filter dropdown.
 // @match        https://stashdb.org/*
 // @grant        unsafeWindow
@@ -104,6 +104,18 @@
         installOnCurrentPage();
         const stashdb = unsafeWindow.stashdb.stashdb;
 
+        function reapplyAfterNavigation() {
+            // StashDB can restore a cached page after its navigation event.
+            // Reapply a few times during that short render window, then stop.
+            for (const delay of [0, 150, 600]) {
+                window.setTimeout(() => {
+                    installOnCurrentPage();
+                    const select = document.querySelector('.visible-filter select');
+                    if (select?.value === MISSING_NO_IGNORED) updateVisibility(select);
+                }, delay);
+            }
+        }
+
         stashdb.addEventListener('scenecard', event => {
             const select = document.querySelector('.visible-filter select');
             if (select?.value === MISSING_NO_IGNORED) {
@@ -117,12 +129,12 @@
         // after each in-app navigation. The timeout lets its Scene Filter create
         // the dropdown before we extend it.
         stashdb.addEventListener('page', () => {
-            window.setTimeout(installOnCurrentPage, 0);
+            reapplyAfterNavigation();
         });
 
         // Pagination changes only the query string, so some StashDB versions do
         // not emit a bundle page event. Listen to SPA history navigation too.
-        const scheduleInstall = () => window.setTimeout(installOnCurrentPage, 200);
+        const scheduleInstall = reapplyAfterNavigation;
         const originalPushState = history.pushState;
         history.pushState = function (...args) {
             const result = originalPushState.apply(this, args);
