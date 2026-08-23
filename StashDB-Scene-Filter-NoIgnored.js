@@ -16,28 +16,30 @@
     let waitObserver;
     let waitTimeout;
 
+    function filterSceneCard(sceneCard, select) {
+        const column = sceneCard?.parentElement;
+        if (!column) return;
+
+        // The bundle adds this marker only after it has loaded both the local
+        // match and saved ignored state. Do not filter unresolved cards yet.
+        const marker = sceneCard.querySelector('.stash_id_match');
+        if (!marker) {
+            column.classList.remove('d-none');
+            return;
+        }
+
+        const isOwned = marker.classList.contains('match-yes');
+        const isIgnored = sceneCard.classList.contains('stash_id_ignored');
+        const show = select.value === MISSING_NO_IGNORED ? !isOwned && !isIgnored : true;
+
+        if (select.value === MISSING_NO_IGNORED) {
+            column.classList.toggle('d-none', !show);
+        }
+    }
+
     function updateVisibility(select) {
         for (const sceneCard of document.querySelectorAll('.SceneCard')) {
-            const column = sceneCard.parentElement;
-            if (!column) continue;
-
-            // The bundle adds this marker only after it has loaded both the
-            // local-Stash match and the saved ignored state. Leave unresolved
-            // cards visible; otherwise a card whose marker arrives late could
-            // remain hidden even though it belongs in the result.
-            const marker = sceneCard.querySelector('.stash_id_match');
-            if (!marker) {
-                column.classList.remove('d-none');
-                continue;
-            }
-
-            const isOwned = marker.classList.contains('match-yes');
-            const isIgnored = sceneCard.classList.contains('stash_id_ignored');
-            const show = select.value === MISSING_NO_IGNORED ? !isOwned && !isIgnored : true;
-
-            if (select.value === MISSING_NO_IGNORED) {
-                column.classList.toggle('d-none', !show);
-            }
+            filterSceneCard(sceneCard, select);
         }
     }
 
@@ -102,11 +104,12 @@
         installOnCurrentPage();
         const stashdb = unsafeWindow.stashdb.stashdb;
 
-        stashdb.addEventListener('scenecard', () => {
+        stashdb.addEventListener('scenecard', event => {
             const select = document.querySelector('.visible-filter select');
             if (select?.value === MISSING_NO_IGNORED) {
-                // The bundle dispatches this after a card state is resolved.
-                window.setTimeout(() => updateVisibility(select), 0);
+                // Filter only the just-resolved card. Re-filtering every card
+                // during history navigation can mix outgoing and incoming pages.
+                window.setTimeout(() => filterSceneCard(event.detail?.sceneEl, select), 0);
             }
         });
 
@@ -119,7 +122,7 @@
 
         // Pagination changes only the query string, so some StashDB versions do
         // not emit a bundle page event. Listen to SPA history navigation too.
-        const scheduleInstall = () => window.setTimeout(installOnCurrentPage, 50);
+        const scheduleInstall = () => window.setTimeout(installOnCurrentPage, 200);
         const originalPushState = history.pushState;
         history.pushState = function (...args) {
             const result = originalPushState.apply(this, args);
