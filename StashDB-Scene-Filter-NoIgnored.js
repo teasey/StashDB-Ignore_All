@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         StashDB Scene Filter - No Ignored
 // @namespace    https://github.com/7dJx1qP/stashdb-userscripts
-// @version      1.1.0
+// @version      1.1.1
 // @description  Adds non-ignored Owned and Missing filters to the StashDB Scene Filter dropdown.
 // @match        https://stashdb.org/*
 // @grant        unsafeWindow
@@ -68,6 +68,9 @@
         // sessionStorage is scoped to this browser tab, so the selected filter
         // survives StashDB's in-app pagination without affecting other tabs.
         restoreSavedFilter(select);
+        // Let companion controls attach only after this newly rendered filter
+        // has finished being extended.
+        document.dispatchEvent(new Event('stashdb-no-ignored-filter-ready'));
         return true;
     }
 
@@ -96,8 +99,9 @@
 
     function start() {
         installOnCurrentPage();
+        const stashdb = unsafeWindow.stashdb.stashdb;
 
-        unsafeWindow.stashdb.addEventListener('scenecard', () => {
+        stashdb.addEventListener('scenecard', () => {
             const select = document.querySelector('.visible-filter select');
             if (select?.value === MISSING_NO_IGNORED) {
                 // The bundle dispatches this after a card state is resolved.
@@ -108,7 +112,7 @@
         // The companion bundle is expected to be installed and emits this event
         // after each in-app navigation. The timeout lets its Scene Filter create
         // the dropdown before we extend it.
-        unsafeWindow.stashdb.addEventListener('page', () => {
+        stashdb.addEventListener('page', () => {
             window.setTimeout(installOnCurrentPage, 0);
         });
 
