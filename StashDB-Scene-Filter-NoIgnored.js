@@ -22,11 +22,12 @@
             if (!column) continue;
 
             // The bundle adds this marker only after it has loaded both the
-            // local-Stash match and the saved ignored state. Do not classify a
-            // card as missing while that asynchronous work is still pending.
+            // local-Stash match and the saved ignored state. Leave unresolved
+            // cards visible; otherwise a card whose marker arrives late could
+            // remain hidden even though it belongs in the result.
             const marker = sceneCard.querySelector('.stash_id_match');
             if (!marker) {
-                if (select.value === MISSING_NO_IGNORED) column.classList.add('d-none');
+                column.classList.remove('d-none');
                 continue;
             }
 
