@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         StashDB – Search for Scene
 // @namespace    https://github.com/7dJx1qP/stashdb-userscripts
-// @version      1.0.3
+// @version      1.1.0
 // @description  Adds “Search for Scene” to the StashDB Userscripts scene-card menu.
 // @author       Jan
 // @match        https://stashdb.org/*
@@ -14,6 +14,7 @@
 
     const MENU_ITEM_CLASS = 'stashdb-search-for-scene';
     const STUDIO_MENU_ITEM_CLASS = 'stashdb-search-for-scene-by-studio';
+    const DATE_MENU_ITEM_CLASS = 'stashdb-search-for-scene-by-date';
     const SEARCH_URL_TEMPLATE = 'https://drunkenslug.com/search/%s';
 
     function searchUrl(terms) {
@@ -28,11 +29,18 @@
         return match ? match[1] : null;
     }
 
-    function fallbackSearchTerms(sceneEl, byStudio = false) {
+    function formatSearchDate(date) {
+        const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || '');
+        return match ? `${match[1].slice(-2)} ${match[2]} ${match[3]}` : '';
+    }
+
+    function fallbackSearchTerms(sceneEl, byStudio = false, byDate = false) {
         const title = sceneEl.querySelector('.card-header h5, .card-title, h5, h4')?.textContent?.trim() || '';
         const performer = sceneEl.querySelector('a[href*="/performers/"]')?.textContent?.trim() || '';
         const studio = sceneEl.querySelector('a[href*="/studios/"]')?.textContent?.trim().replace(/\s+/g, '') || '';
-        return (byStudio ? [performer, studio] : [title, performer]).filter(Boolean).join(' ');
+        const date = formatSearchDate(sceneEl.textContent.match(/\b\d{4}-\d{2}-\d{2}\b/)?.[0]);
+        return (byDate ? [performer, studio, date] : byStudio ? [performer, studio] : [title, performer])
+            .filter(Boolean).join(' ');
     }
 
     async function preferredPerformerName(stashdb, appearances) {
@@ -55,13 +63,14 @@
         return performers[0]?.performer?.name || '';
     }
 
-    async function sceneSearchTerms(stashdb, stashId, sceneEl, byStudio = false) {
+    async function sceneSearchTerms(stashdb, stashId, sceneEl, byStudio = false, byDate = false) {
         const request = {
             operationName: 'SceneSearchTerms',
             variables: { id: stashId },
             query: `query SceneSearchTerms($id: ID!) {
                 findScene(id: $id) {
                     title
+                    release_date
                     performers { performer { id name } }
                     studio { name }
                 }
@@ -71,7 +80,9 @@
         const title = scene?.title || sceneEl.querySelector('.card-header h5, .card-title, h5')?.textContent?.trim();
         const performer = await preferredPerformerName(stashdb, scene?.performers);
         const studio = scene?.studio?.name?.replace(/\s+/g, '') || '';
-        return (byStudio ? [performer, studio] : [title, performer]).filter(Boolean).join(' ');
+        const date = formatSearchDate(scene?.release_date);
+        return (byDate ? [performer, studio, date] : byStudio ? [performer, studio] : [title, performer])
+            .filter(Boolean).join(' ');
     }
 
     function addMenuItem(stashdb, sceneEl, markerEl) {
@@ -153,6 +164,37 @@
         });
 
         menu.appendChild(studioItem);
+
+        const dateItem = document.createElement('a');
+        dateItem.className = `dropdown-item ${DATE_MENU_ITEM_CLASS}`;
+        dateItem.href = '#';
+        dateItem.textContent = 'Search for Scene by date';
+        dateItem.style.cssText = 'color: black; padding: 5px; text-decoration: none';
+
+        dateItem.addEventListener('click', async event => {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+
+            const searchTab = window.open('about:blank', '_blank');
+            if (!searchTab) {
+                console.warn('[StashDB Search for Scene] The browser blocked the new tab.');
+                return;
+            }
+
+            dateItem.textContent = 'Searching by date...';
+            try {
+                const terms = await sceneSearchTerms(stashdb, stashId, sceneEl, true, true);
+                if (!terms) throw new Error('No performer, studio, or date was found.');
+                searchTab.location.replace(searchUrl(terms));
+            } catch (error) {
+                console.error('[StashDB Search for Scene by date]', error);
+                const fallback = fallbackSearchTerms(sceneEl, true, true) || stashId;
+                searchTab.location.replace(searchUrl(fallback));
+                dateItem.textContent = fallback === stashId ? 'Searched by StashID' : 'Searched with card data';
+            }
+        });
+
+        menu.appendChild(dateItem);
     }
 
     function wireMarker(stashdb, sceneEl) {
